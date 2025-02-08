@@ -1,265 +1,252 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 
-// компоненти мазуту
-class MazutComposition {
-  final double carbonCombustible;
-  final double hydrogenCombustible;
-  final double oxygenCombustible;
-  final double sulfurCombustible;
-  final double vanadiumCombustible;
-  final double moistureContent;
-  final double ashDry;
-  final double heatingValueCombustible;
+// вхідні дані
+class Data {
+  final double power;
+  final double electricity;
+  final double deviation1;
+  final double deviation2;
 
-  MazutComposition({
-    this.carbonCombustible = 0.0,
-    this.hydrogenCombustible = 0.0,
-    this.oxygenCombustible = 0.0,
-    this.sulfurCombustible = 0.0,
-    this.vanadiumCombustible = 0.0,
-    this.moistureContent = 0.0,
-    this.ashDry = 0.0,
-    this.heatingValueCombustible = 0.0,
+  Data({
+    this.power = 0.0,
+    this.electricity = 0.0,
+    this.deviation1 = 0.0,
+    this.deviation2 = 0.0,
   });
 
-  MazutComposition copyWith({
-    double? carbonCombustible,
-    double? hydrogenCombustible,
-    double? oxygenCombustible,
-    double? sulfurCombustible,
-    double? vanadiumCombustible,
-    double? moistureContent,
-    double? ashDry,
-    double? heatingValueCombustible,
+  Data copyWith({
+    double? power,
+    double? electricity,
+    double? deviation1,
+    double? deviation2,
   }) {
-    return MazutComposition(
-      carbonCombustible: carbonCombustible ?? this.carbonCombustible,
-      hydrogenCombustible: hydrogenCombustible ?? this.hydrogenCombustible,
-      oxygenCombustible: oxygenCombustible ?? this.oxygenCombustible,
-      sulfurCombustible: sulfurCombustible ?? this.sulfurCombustible,
-      vanadiumCombustible: vanadiumCombustible ?? this.vanadiumCombustible,
-      moistureContent: moistureContent ?? this.moistureContent,
-      ashDry: ashDry ?? this.ashDry,
-      heatingValueCombustible:
-          heatingValueCombustible ?? this.heatingValueCombustible,
+    return Data(
+      power: power ?? this.power,
+      electricity: electricity ?? this.electricity,
+      deviation1: deviation1 ?? this.deviation1,
+      deviation2: deviation2 ?? this.deviation2,
     );
   }
 }
 
 // результати розрахунків
-class MazutResults {
-  final Map<String, double> workingComposition;
-  final double workingHeatingValue;
+class CalculationResults {
+  final double profitBefore;
+  final double profitAfter;
 
-  MazutResults({
-    this.workingComposition = const {},
-    this.workingHeatingValue = 0.0,
+  CalculationResults({
+    this.profitBefore = 0.0,
+    this.profitAfter = 0.0,
   });
 }
 
 class Calculator2Screen extends StatefulWidget {
-  const Calculator2Screen({
-    super.key,
-  });
+  const Calculator2Screen({super.key});
 
   @override
   State<Calculator2Screen> createState() => _Calculator2ScreenState();
 }
 
 class _Calculator2ScreenState extends State<Calculator2Screen> {
-  MazutComposition composition = MazutComposition();
-  MazutResults? results;
+  Data data = Data();
+  CalculationResults? results;
 
-  void updateComposition(String field, double value) {
+  void updateData(String field, double value) {
     setState(() {
       switch (field) {
-        case 'carbonCombustible':
-          composition = composition.copyWith(carbonCombustible: value);
-        case 'hydrogenCombustible':
-          composition = composition.copyWith(hydrogenCombustible: value);
-        case 'oxygenCombustible':
-          composition = composition.copyWith(oxygenCombustible: value);
-        case 'sulfurCombustible':
-          composition = composition.copyWith(sulfurCombustible: value);
-        case 'vanadiumCombustible':
-          composition = composition.copyWith(vanadiumCombustible: value);
-        case 'moistureContent':
-          composition = composition.copyWith(moistureContent: value);
-        case 'ashDry':
-          composition = composition.copyWith(ashDry: value);
-        case 'heatingValueCombustible':
-          composition = composition.copyWith(heatingValueCombustible: value);
+        case 'power':
+          data = data.copyWith(power: value);
+        case 'electricity':
+          data = data.copyWith(electricity: value);
+        case 'deviation1':
+          data = data.copyWith(deviation1: value);
+        case 'deviation2':
+          data = data.copyWith(deviation2: value);
       }
     });
   }
 
-  MazutResults calculateMazutResults(MazutComposition composition) {
-    // формула перерахунку складу палива
-    final conversionFactor =
-        (100.0 - composition.moistureContent - composition.ashDry) / 100.0;
+  // функція нормального закону розподілу потужності (формула 9.1)
+  double normalDistribution(double x, double power, double sigma) {
+    return (1 / (sigma * sqrt(2 * pi))) *
+        exp(-(pow(x - power, 2)) / (2 * pow(sigma, 2)));
+  }
 
-    // перерахунок для кожного компонента
-    final workingComposition = {
-      'C^P': composition.carbonCombustible * conversionFactor,
-      'H^P': composition.hydrogenCombustible * conversionFactor,
-      'O^P': composition.oxygenCombustible * conversionFactor,
-      'S^P': composition.sulfurCombustible * conversionFactor,
-      // віднімання - отримання маси без вологи (суха маса)
-      // оскільки ванадій вказується відносно маси без вологи
-      // ділення - отримання відсотку
-      'V^P': composition.vanadiumCombustible *
-          (100.0 - composition.moistureContent) /
-          100.0,
-      // віднімання - отримання відсотка маси без вологи
-      // оскільки зола вказується відносно маси без вологи
-      // ділення - отримання відсотку
-      'A^P': composition.ashDry * (100.0 - composition.moistureContent) / 100.0,
-    };
+  // інтегрування
+  double integrate(
+    double a, // нижня межа
+    double b, // верхня межа
+    int n, // кількість точок для інтегрування
+    double power,
+    double sigma,
+  ) {
+    final h = (b - a) / n;
+    var sum = (normalDistribution(a, power, sigma) +
+            normalDistribution(b, power, sigma)) /
+        2;
 
-    // розрахунок нижчої теплоти згорання
-    final workingHeatingValue = composition.heatingValueCombustible *
-            (100.0 - composition.moistureContent - composition.ashDry) /
-            100.0 -
-        0.025 * composition.moistureContent;
+    for (var i = 1; i < n; i++) {
+      final x = a + i * h;
+      sum += normalDistribution(x, power, sigma);
+    }
 
-    return MazutResults(
-      workingComposition: workingComposition,
-      workingHeatingValue: workingHeatingValue,
+    return h * sum;
+  }
+
+  double calculateEnergyWithoutImbalance(
+    double power,
+    double sigma,
+    double lowerBound,
+    double upperBound,
+  ) {
+    return integrate(
+          lowerBound,
+          upperBound,
+          100000,
+          power,
+          sigma,
+        ) *
+        100; // переводимо у відсотки
+  }
+
+  CalculationResults calculateResults(Data data) {
+    // діапазони
+    const lowerBound = 4.75;
+    const upperBound = 5.25;
+
+    // розрахунок частки енергії без небалансів до покращення (δW1)
+    final energyWithoutImbalance1 = calculateEnergyWithoutImbalance(
+      data.power,
+      data.deviation1,
+      lowerBound,
+      upperBound,
+    ).round().toDouble();
+
+    // розрахунок частки енергії без небалансів після покращення (δW2)
+    final energyWithoutImbalance2 = calculateEnergyWithoutImbalance(
+      data.power,
+      data.deviation2,
+      lowerBound,
+      upperBound,
+    ).round().toDouble();
+
+    // енергія W1
+    final energy1 = data.power * 24 * energyWithoutImbalance1 / 100;
+
+    // прибуток П1
+    final profit1 = energy1 * data.electricity;
+
+    // енергія W2
+    final energy2 = data.power * 24 * (1 - energyWithoutImbalance1 / 100);
+
+    // штраф Ш1
+    final fine1 = energy2 * data.electricity;
+
+    // загальний прибуток перед покращенням
+    final profitBefore = profit1 - fine1;
+
+    // енергія W3
+    final energy3 = data.power * 24 * energyWithoutImbalance2 / 100;
+
+    // прибуток П2
+    final profit2 = energy3 * data.electricity;
+
+    // енергія W4
+    final energy4 = data.power * 24 * (1 - energyWithoutImbalance2 / 100);
+
+    // штраф Ш2
+    final fine2 = energy4 * data.electricity;
+
+    // загальний прибуток після покращення
+    final profitAfter = profit2 - fine2;
+
+    return CalculationResults(
+      profitBefore: profitBefore,
+      profitAfter: profitAfter,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
+      body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'Калькулятор складу мазуту',
-                style: Theme.of(context).textTheme.headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Склад горючої маси',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      InputField(
-                        label: 'Вуглець (C^Г), %',
-                        value: composition.carbonCombustible,
-                        onChanged: (value) =>
-                            updateComposition('carbonCombustible', value),
-                      ),
-                      InputField(
-                        label: 'Водень (H^Г), %',
-                        value: composition.hydrogenCombustible,
-                        onChanged: (value) =>
-                            updateComposition('hydrogenCombustible', value),
-                      ),
-                      InputField(
-                        label: 'Кисень (O^Г), %',
-                        value: composition.oxygenCombustible,
-                        onChanged: (value) =>
-                            updateComposition('oxygenCombustible', value),
-                      ),
-                      InputField(
-                        label: 'Сірка (S^Г), %',
-                        value: composition.sulfurCombustible,
-                        onChanged: (value) =>
-                            updateComposition('sulfurCombustible', value),
-                      ),
-                      InputField(
-                        label: 'Ванадій (V^Г), мг/кг',
-                        value: composition.vanadiumCombustible,
-                        onChanged: (value) =>
-                            updateComposition('vanadiumCombustible', value),
-                      ),
-                    ],
-                  ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 500,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Калькулятор прибутку від сонячних електростанцій',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Додаткові параметри',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      InputField(
-                        label: 'Вологість, %',
-                        value: composition.moistureContent,
-                        onChanged: (value) =>
-                            updateComposition('moistureContent', value),
-                      ),
-                      InputField(
-                        label: 'Зольність, %',
-                        value: composition.ashDry,
-                        onChanged: (value) =>
-                            updateComposition('ashDry', value),
-                      ),
-                      InputField(
-                        label: 'Нижча теплота згоряння, МДж/кг',
-                        value: composition.heatingValueCombustible,
-                        onChanged: (value) =>
-                            updateComposition('heatingValueCombustible', value),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 16),
+                InputField(
+                  label: 'Середньодобова потужність, МВт',
+                  value: data.power,
+                  onChanged: (value) => updateData('power', value),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple[400],
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      results = calculateMazutResults(composition);
-                    });
-                  },
-                  child: const Text(
-                    'Розрахувати',
-                    style: TextStyle(
-                      color: Colors.white,
+                InputField(
+                  label: 'Середньоквадратичне відхилення, МВт',
+                  value: data.deviation1,
+                  onChanged: (value) => updateData('deviation1', value),
+                ),
+                InputField(
+                  label: 'Середньоквадратичне відхилення 2, МВт',
+                  value: data.deviation2,
+                  onChanged: (value) => updateData('deviation2', value),
+                ),
+                InputField(
+                  label: 'Вартість електроенергії, МВт',
+                  value: data.electricity,
+                  onChanged: (value) => updateData('electricity', value),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple[400],
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        results = calculateResults(data);
+                      });
+                    },
+                    child: const Text(
+                      'Розрахувати',
+                      style: TextStyle(
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.purple[400]!),
-                  ),
-                  child: Text(
-                    'Повернутися',
-                    style: TextStyle(
-                      color: Colors.purple[400],
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.purple[400]!),
+                    ),
+                    child: Text(
+                      'Повернутися',
+                      style: TextStyle(
+                        color: Colors.purple[400],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (results != null) DisplayMazutResults(results: results!),
-            ],
+                if (results != null) ResultsDisplay(results: results!),
+              ],
+            ),
           ),
         ),
       ),
@@ -297,8 +284,11 @@ class _InputFieldState extends State<InputField> {
   @override
   void didUpdateWidget(covariant InputField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.value != oldWidget.value) {
+    if (widget.value != oldWidget.value &&
+        !_controller.text.contains(RegExp(r'[.,]$'))) {
+      final selection = _controller.selection;
       _controller.text = widget.value == 0.0 ? '' : widget.value.toString();
+      _controller.selection = selection;
     }
   }
 
@@ -320,62 +310,90 @@ class _InputFieldState extends State<InputField> {
         ),
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         onChanged: (value) {
-          widget.onChanged(double.tryParse(value) ?? 0.0);
+          if (value.isEmpty) {
+            widget.onChanged(0.0);
+            return;
+          }
+          final normalizedValue = value.replaceAll(',', '.');
+          final number = double.tryParse(normalizedValue);
+          if (number != null) {
+            widget.onChanged(number);
+          }
         },
       ),
     );
   }
 }
 
-class DisplayMazutResults extends StatelessWidget {
-  final MazutResults results;
+class ResultsDisplay extends StatelessWidget {
+  final CalculationResults results;
 
-  const DisplayMazutResults({
+  const ResultsDisplay({super.key, required this.results});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text(
+          'Результати розрахунків:',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        ResultSection(
+          title: 'Прибутки:',
+          items: {
+            'до вдосконалення': ResultValue(results.profitBefore, 'тис.грн'),
+            'після вдосконалення': ResultValue(results.profitAfter, 'тис.грн'),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class ResultValue {
+  final double value;
+  final String? unit;
+
+  const ResultValue(this.value, [this.unit]);
+}
+
+class ResultSection extends StatelessWidget {
+  final String title;
+  final Map<String, ResultValue> items;
+
+  const ResultSection({
     super.key,
-    required this.results,
+    required this.title,
+    required this.items,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Результати розрахунків',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Склад робочої маси:',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            ...results.workingComposition.entries.map((entry) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(entry.key),
-                      Text(
-                        entry.key.contains('V')
-                            ? '${entry.value.toStringAsFixed(2)} мг/кг'
-                            : '${entry.value.toStringAsFixed(2)}%',
-                      ),
-                    ],
-                  ),
-                )),
-            const SizedBox(height: 8),
-            Text(
-              'Нижча теплота згоряння робочої маси:',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            Text('${results.workingHeatingValue.toStringAsFixed(2)} МДж/кг'),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium,
         ),
-      ),
+        const SizedBox(height: 4),
+        ...items.entries.map((entry) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(entry.key),
+                  Text(entry.value.unit != null
+                      ? '${entry.value.value.toStringAsFixed(2)} ${entry.value.unit}'
+                      : entry.value.value.toStringAsFixed(2)),
+                ],
+              ),
+            )),
+      ],
     );
   }
 }

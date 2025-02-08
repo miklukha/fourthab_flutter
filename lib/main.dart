@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/calculator1_screen.dart';
 import 'screens/calculator2_screen.dart';
+import 'screens/calculator3_screen.dart';
 import 'screens/entry_screen.dart';
 
 void main() {
@@ -33,6 +34,9 @@ class MyApp extends StatelessWidget {
             break;
           case '/calculator2':
             page = const Calculator2Screen();
+            break;
+          case '/calculator3':
+            page = const Calculator3Screen();
             break;
           default:
             page = const EntryScreen();

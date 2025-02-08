@@ -1,92 +1,169 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-// дані систем
-class SystemData {
-  final double current;
-  final double switchOffCurrentTime;
-  final double sm;
+// вхідні дані
+class Data {
+  final double power;
+  final double electricity;
+  final double deviation1;
+  final double deviation2;
 
-  SystemData({
-    this.current = 0.0,
-    this.switchOffCurrentTime = 0.0,
-    this.sm = 0.0,
+  Data({
+    this.power = 0.0,
+    this.electricity = 0.0,
+    this.deviation1 = 0.0,
+    this.deviation2 = 0.0,
   });
 
-  SystemData copyWith({
-    double? current,
-    double? switchOffCurrentTime,
-    double? sm,
+  Data copyWith({
+    double? power,
+    double? electricity,
+    double? deviation1,
+    double? deviation2,
   }) {
-    return SystemData(
-      current: current ?? this.current,
-      switchOffCurrentTime: switchOffCurrentTime ?? this.switchOffCurrentTime,
-      sm: sm ?? this.sm,
+    return Data(
+      power: power ?? this.power,
+      electricity: electricity ?? this.electricity,
+      deviation1: deviation1 ?? this.deviation1,
+      deviation2: deviation2 ?? this.deviation2,
     );
   }
 }
 
 // результати розрахунків
 class CalculationResults {
-  final double section;
-  final double increaseMinimum;
+  final double profitBefore;
+  final double profitAfter;
 
   CalculationResults({
-    this.section = 0.0,
-    this.increaseMinimum = 0.0,
+    this.profitBefore = 0.0,
+    this.profitAfter = 0.0,
   });
 }
 
-class Calculator1Screen extends StatefulWidget {
-  const Calculator1Screen({super.key});
+class Calculator3Screen extends StatefulWidget {
+  const Calculator3Screen({super.key});
 
   @override
-  State<Calculator1Screen> createState() => _Calculator1ScreenState();
+  State<Calculator3Screen> createState() => _Calculator3ScreenState();
 }
 
-class _Calculator1ScreenState extends State<Calculator1Screen> {
-  SystemData data = SystemData();
+class _Calculator3ScreenState extends State<Calculator3Screen> {
+  Data data = Data();
   CalculationResults? results;
 
   void updateData(String field, double value) {
     setState(() {
       switch (field) {
-        case 'current':
-          data = data.copyWith(current: value);
-        case 'switchOffCurrentTime':
-          data = data.copyWith(switchOffCurrentTime: value);
-        case 'sm':
-          data = data.copyWith(sm: value);
+        case 'power':
+          data = data.copyWith(power: value);
+        case 'electricity':
+          data = data.copyWith(electricity: value);
+        case 'deviation1':
+          data = data.copyWith(deviation1: value);
+        case 'deviation2':
+          data = data.copyWith(deviation2: value);
       }
     });
   }
 
-  CalculationResults calculateResults(SystemData data) {
-    // напруга
-    const voltage = 10;
-    // економічна густина струму для кабелів з паперовою ізоляцією для Тм = 4000год
-    const density = 1.4;
-    // для кабелів з алюмінієвими суцільними жилами,
-    // паперовою ізоляцією і номінальною напругою 6 кВ
-    const ct = 92.0;
+  // функція нормального закону розподілу потужності (формула 9.1)
+  double normalDistribution(double x, double power, double sigma) {
+    return (1 / (sigma * sqrt(2 * pi))) *
+        exp(-(pow(x - power, 2)) / (2 * pow(sigma, 2)));
+  }
 
-    // розрахунковий струм для нормального режиму
-    final ratedCurrentNormal = (data.sm / 2) / (sqrt(3.0) * voltage);
+  // інтегрування
+  double integrate(
+    double a, // нижня межа
+    double b, // верхня межа
+    int n, // кількість точок для інтегрування
+    double power,
+    double sigma,
+  ) {
+    final h = (b - a) / n;
+    var sum = (normalDistribution(a, power, sigma) +
+            normalDistribution(b, power, sigma)) /
+        2;
 
-    // розрахунковий струм для післяаварійного режиму
-    // ignore: unused_local_variable
-    final ratedCurrentAfterEmergency = 2 * ratedCurrentNormal;
+    for (var i = 1; i < n; i++) {
+      final x = a + i * h;
+      sum += normalDistribution(x, power, sigma);
+    }
 
-    // економічний переріз
-    final section = ratedCurrentNormal / density;
+    return h * sum;
+  }
 
-    // мінімум збільшення перерізу жил кабелю
-    final increaseMinimum =
-        data.current * 1000 * sqrt(data.switchOffCurrentTime) / ct;
+  double calculateEnergyWithoutImbalance(
+    double power,
+    double sigma,
+    double lowerBound,
+    double upperBound,
+  ) {
+    return integrate(
+          lowerBound,
+          upperBound,
+          100000,
+          power,
+          sigma,
+        ) *
+        100; // переводимо у відсотки
+  }
+
+  CalculationResults calculateResults(Data data) {
+    // діапазони
+    const lowerBound = 4.75;
+    const upperBound = 5.25;
+
+    // розрахунок частки енергії без небалансів до покращення (δW1)
+    final energyWithoutImbalance1 = calculateEnergyWithoutImbalance(
+      data.power,
+      data.deviation1,
+      lowerBound,
+      upperBound,
+    ).round().toDouble();
+
+    // розрахунок частки енергії без небалансів після покращення (δW2)
+    final energyWithoutImbalance2 = calculateEnergyWithoutImbalance(
+      data.power,
+      data.deviation2,
+      lowerBound,
+      upperBound,
+    ).round().toDouble();
+
+    // енергія W1
+    final energy1 = data.power * 24 * energyWithoutImbalance1 / 100;
+
+    // прибуток П1
+    final profit1 = energy1 * data.electricity;
+
+    // енергія W2
+    final energy2 = data.power * 24 * (1 - energyWithoutImbalance1 / 100);
+
+    // штраф Ш1
+    final fine1 = energy2 * data.electricity;
+
+    // загальний прибуток перед покращенням
+    final profitBefore = profit1 - fine1;
+
+    // енергія W3
+    final energy3 = data.power * 24 * energyWithoutImbalance2 / 100;
+
+    // прибуток П2
+    final profit2 = energy3 * data.electricity;
+
+    // енергія W4
+    final energy4 = data.power * 24 * (1 - energyWithoutImbalance2 / 100);
+
+    // штраф Ш2
+    final fine2 = energy4 * data.electricity;
+
+    // загальний прибуток після покращення
+    final profitAfter = profit2 - fine2;
 
     return CalculationResults(
-      section: section,
-      increaseMinimum: increaseMinimum,
+      profitBefore: profitBefore,
+      profitAfter: profitAfter,
     );
   }
 
@@ -104,31 +181,30 @@ class _Calculator1ScreenState extends State<Calculator1Screen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Калькулятор для розрахунку струму',
+                  'Калькулятор прибутку від сонячних електростанцій',
                   style: Theme.of(context).textTheme.headlineMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Вибрати кабелі для живлення двотрансформаторної підстанції системи внутрішнього елкетропостачання підприємства напругою 10 кВ. Струм К3 Ік = 2.5 кА, фіктиіний час вимикання струму КЗ tф = 2.5с. Потужність ТП - 2х1000 кВ А. Розрахункове навантаження Sм = 1300 кВ А, Тм = 4000 год.',
-                  textAlign: TextAlign.justify,
-                ),
-                const SizedBox(height: 16),
                 InputField(
-                  label: 'Струм КЗ, кА',
-                  value: data.current,
-                  onChanged: (value) => updateData('current', value),
+                  label: 'Середньодобова потужність, МВт',
+                  value: data.power,
+                  onChanged: (value) => updateData('power', value),
                 ),
                 InputField(
-                  label: 'Фіктивний час вимикання струму КЗ, с',
-                  value: data.switchOffCurrentTime,
-                  onChanged: (value) =>
-                      updateData('switchOffCurrentTime', value),
+                  label: 'Середньоквадратичне відхилення, МВт',
+                  value: data.deviation1,
+                  onChanged: (value) => updateData('deviation1', value),
                 ),
                 InputField(
-                  label: 'Sm, кВ',
-                  value: data.sm,
-                  onChanged: (value) => updateData('sm', value),
+                  label: 'Середньоквадратичне відхилення 2, МВт',
+                  value: data.deviation2,
+                  onChanged: (value) => updateData('deviation2', value),
+                ),
+                InputField(
+                  label: 'Вартість електроенергії, МВт',
+                  value: data.electricity,
+                  onChanged: (value) => updateData('electricity', value),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -266,11 +342,10 @@ class ResultsDisplay extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         ResultSection(
-          title: 'Результати:',
+          title: 'Прибутки:',
           items: {
-            'Економічний переріз': ResultValue(results.section, 'мм2'),
-            'Переріз має бути збільшений мінімум до':
-                ResultValue(results.increaseMinimum, 'мм2'),
+            'до вдосконалення': ResultValue(results.profitBefore, 'тис.грн'),
+            'після вдосконалення': ResultValue(results.profitAfter, 'тис.грн'),
           },
         ),
       ],
@@ -312,9 +387,9 @@ class ResultSection extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(entry.key),
-                  Text(
-                    '${entry.value.value.toStringAsFixed(1)} ${entry.value.unit}',
-                  ),
+                  Text(entry.value.unit != null
+                      ? '${entry.value.value.toStringAsFixed(2)} ${entry.value.unit}'
+                      : entry.value.value.toStringAsFixed(2)),
                 ],
               ),
             )),
