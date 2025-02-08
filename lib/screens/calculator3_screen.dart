@@ -3,41 +3,61 @@ import 'dart:math';
 
 // вхідні дані
 class Data {
-  final double power;
-  final double electricity;
-  final double deviation1;
-  final double deviation2;
+  final double rcn;
+  final double xcn;
+  final double rcmin;
+  final double xcmin;
 
   Data({
-    this.power = 0.0,
-    this.electricity = 0.0,
-    this.deviation1 = 0.0,
-    this.deviation2 = 0.0,
+    this.rcn = 0.0,
+    this.xcn = 0.0,
+    this.rcmin = 0.0,
+    this.xcmin = 0.0,
   });
 
   Data copyWith({
-    double? power,
-    double? electricity,
-    double? deviation1,
-    double? deviation2,
+    double? rcn,
+    double? xcn,
+    double? rcmin,
+    double? xcmin,
   }) {
     return Data(
-      power: power ?? this.power,
-      electricity: electricity ?? this.electricity,
-      deviation1: deviation1 ?? this.deviation1,
-      deviation2: deviation2 ?? this.deviation2,
+      rcn: rcn ?? this.rcn,
+      xcn: xcn ?? this.xcn,
+      rcmin: rcmin ?? this.rcmin,
+      xcmin: xcmin ?? this.xcmin,
     );
   }
 }
 
 // результати розрахунків
 class CalculationResults {
-  final double profitBefore;
-  final double profitAfter;
+  final int iThreeNormal;
+  final int iThreeMinimal;
+  final int iTwoNormal;
+  final int iTwoMinimal;
+  final int iThreeNormalActual;
+  final int iThreeMinimalActual;
+  final int iTwoNormalActual;
+  final int iTwoMinimalActual;
+  final int iThreeNormal10;
+  final int iThreeMinimal10;
+  final int iTwoNormal10;
+  final int iTwoMinimal10;
 
   CalculationResults({
-    this.profitBefore = 0.0,
-    this.profitAfter = 0.0,
+    this.iThreeNormal = 0,
+    this.iThreeMinimal = 0,
+    this.iTwoNormal = 0,
+    this.iTwoMinimal = 0,
+    this.iThreeNormalActual = 0,
+    this.iThreeMinimalActual = 0,
+    this.iTwoNormalActual = 0,
+    this.iTwoMinimalActual = 0,
+    this.iThreeNormal10 = 0,
+    this.iThreeMinimal10 = 0,
+    this.iTwoNormal10 = 0,
+    this.iTwoMinimal10 = 0,
   });
 }
 
@@ -55,115 +75,121 @@ class _Calculator3ScreenState extends State<Calculator3Screen> {
   void updateData(String field, double value) {
     setState(() {
       switch (field) {
-        case 'power':
-          data = data.copyWith(power: value);
-        case 'electricity':
-          data = data.copyWith(electricity: value);
-        case 'deviation1':
-          data = data.copyWith(deviation1: value);
-        case 'deviation2':
-          data = data.copyWith(deviation2: value);
+        case 'rcn':
+          data = data.copyWith(rcn: value);
+        case 'xcn':
+          data = data.copyWith(xcn: value);
+        case 'rcmin':
+          data = data.copyWith(rcmin: value);
+        case 'xcmin':
+          data = data.copyWith(xcmin: value);
       }
     });
   }
 
-  // функція нормального закону розподілу потужності (формула 9.1)
-  double normalDistribution(double x, double power, double sigma) {
-    return (1 / (sigma * sqrt(2 * pi))) *
-        exp(-(pow(x - power, 2)) / (2 * pow(sigma, 2)));
-  }
-
-  // інтегрування
-  double integrate(
-    double a, // нижня межа
-    double b, // верхня межа
-    int n, // кількість точок для інтегрування
-    double power,
-    double sigma,
-  ) {
-    final h = (b - a) / n;
-    var sum = (normalDistribution(a, power, sigma) +
-            normalDistribution(b, power, sigma)) /
-        2;
-
-    for (var i = 1; i < n; i++) {
-      final x = a + i * h;
-      sum += normalDistribution(x, power, sigma);
-    }
-
-    return h * sum;
-  }
-
-  double calculateEnergyWithoutImbalance(
-    double power,
-    double sigma,
-    double lowerBound,
-    double upperBound,
-  ) {
-    return integrate(
-          lowerBound,
-          upperBound,
-          100000,
-          power,
-          sigma,
-        ) *
-        100; // переводимо у відсотки
-  }
-
   CalculationResults calculateResults(Data data) {
-    // діапазони
-    const lowerBound = 4.75;
-    const upperBound = 5.25;
+    final ukmax = 11.1;
+    final uvn = 115;
+    final unn = 11;
+    final r0 = 0.64;
+    final x0 = 0.363;
+    // номінальна потужність трансформатора
+    final snomt = 6.3;
 
-    // розрахунок частки енергії без небалансів до покращення (δW1)
-    final energyWithoutImbalance1 = calculateEnergyWithoutImbalance(
-      data.power,
-      data.deviation1,
-      lowerBound,
-      upperBound,
-    ).round().toDouble();
+    // реактивний опір (реактанс) ТМН 6300/110
+    final xt = ((ukmax * pow(uvn, 2)) / (100 * snomt)).round();
 
-    // розрахунок частки енергії без небалансів після покращення (δW2)
-    final energyWithoutImbalance2 = calculateEnergyWithoutImbalance(
-      data.power,
-      data.deviation2,
-      lowerBound,
-      upperBound,
-    ).round().toDouble();
+    // опори на шинах 10 кВ в нормальному та мінімальному режимах,
+    // що приведені до напруги 110 кВ
+    final rTire = data.rcn;
+    final xTire = data.xcn + xt;
+    final zTire =
+        double.parse((sqrt(pow(rTire, 2) + pow(xTire, 2))).toStringAsFixed(1));
+    final rTireMinimal = data.rcmin;
+    final xTireMinimal = data.xcmin + xt;
+    final zTireMinimal = double.parse(
+        (sqrt(pow(rTireMinimal, 2) + pow(xTireMinimal, 2))).toStringAsFixed(1));
 
-    // енергія W1
-    final energy1 = data.power * 24 * energyWithoutImbalance1 / 100;
+    // Струми трифазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ
+    // (нормальний режим)
+    final iThreeNormal = (uvn * 1000 / (1.73 * zTire)).round();
+    // (мінімальний режим)
+    final iThreeMinimal = (uvn * 1000 / (1.73 * zTireMinimal)).round();
 
-    // прибуток П1
-    final profit1 = energy1 * data.electricity;
+    // Струми двофазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ
+    // (нормальний режим)
+    final iTwoNormal = (iThreeNormal * (1.73 / 2)).round();
+    // (мінімальний режим)
+    final iTwoMinimal = (iThreeMinimal * (1.73 / 2)).round();
 
-    // енергія W2
-    final energy2 = data.power * 24 * (1 - energyWithoutImbalance1 / 100);
+    // коефіцієнт приведення для визначення дійсних струмів на шинах 10 кВ
+    final kpr = double.parse((pow(unn, 2) / pow(uvn, 2)).toStringAsFixed(3));
 
-    // штраф Ш1
-    final fine1 = energy2 * data.electricity;
+    // опори на шинах 10 кВ в нормальному та мінімальному режимах
+    final rTireN = double.parse((rTire * kpr).toStringAsFixed(1));
+    final xTireN = double.parse((xTire * kpr).toStringAsFixed(2));
+    final zTireN = double.parse(
+        (sqrt(pow(rTireN, 2) + pow(xTireN, 2))).toStringAsFixed(2));
+    final rTireNMinimal = double.parse((rTireMinimal * kpr).toStringAsFixed(2));
+    final xTireNMinimal = double.parse((xTireMinimal * kpr).toStringAsFixed(2));
+    final zTireNMinimal = double.parse(
+        (sqrt(pow(rTireNMinimal, 2) + pow(xTireNMinimal, 2)))
+            .toStringAsFixed(1));
 
-    // загальний прибуток перед покращенням
-    final profitBefore = profit1 - fine1;
+    // Дійсні струми трифазного КЗ на шинах 10 кВ
+    // (нормальний режим)
+    final iThreeNormalActual = (unn * 1000 / (1.73 * zTireN)).round();
+    // (мінімальний режим)
+    final iThreeMinimalActual = (unn * 1000 / (1.73 * zTireNMinimal)).round();
 
-    // енергія W3
-    final energy3 = data.power * 24 * energyWithoutImbalance2 / 100;
+    // Дійсні струми двофазного КЗ на шинах 10 кВ
+    // (нормальний режим)
+    final iTwoNormalActual = (iThreeNormalActual * (1.73 / 2)).round();
+    // (мінімальний режим)
+    final iTwoMinimalActual = (iThreeMinimalActual * (1.73 / 2)).round();
 
-    // прибуток П2
-    final profit2 = energy3 * data.electricity;
+    // довжина лінії електропередач
+    final il = 0.2 + 0.35 + 0.2 + 0.6 + 2 + 2.55 + 3.37 + 3.1;
+    // резистанс лінії електропередач
+    final rl = il * r0;
+    // реактанс лінії електропередач
+    final xl = il * x0;
 
-    // енергія W4
-    final energy4 = data.power * 24 * (1 - energyWithoutImbalance2 / 100);
+    // опори в точці 10 в нормальному та мінімальному режимах
+    final r10n = double.parse((rl + rTireN).toStringAsFixed(2));
+    final x10n = double.parse((xl + xTireN).toStringAsFixed(2));
+    final z10n =
+        double.parse((sqrt(pow(r10n, 2) + pow(x10n, 2))).toStringAsFixed(2));
+    final r10nMinimal = double.parse((rl + rTireNMinimal).toStringAsFixed(2));
+    final x10nMinimal = double.parse((xl + xTireNMinimal).toStringAsFixed(1));
+    final z10nMinimal = double.parse(
+        (sqrt(pow(r10nMinimal, 2) + pow(x10nMinimal, 2))).toStringAsFixed(2));
 
-    // штраф Ш2
-    final fine2 = energy4 * data.electricity;
+    // Струми трифазного КЗ в точці 10
+    // (нормальний режим)
+    final iThreeNormal10 = (unn * 1000 / (1.73 * z10n)).round();
+    // (мінімальний режим)
+    final iThreeMinimal10 = (unn * 1000 / (1.73 * z10nMinimal)).round();
 
-    // загальний прибуток після покращення
-    final profitAfter = profit2 - fine2;
+    // Струми двофазного КЗ в точці 10
+    // (нормальний режим)
+    final iTwoNormal10 = (iThreeNormal10 * (1.73 / 2)).round();
+    // (мінімальний режим)
+    final iTwoMinimal10 = (iThreeMinimal10 * (1.73 / 2)).round();
 
     return CalculationResults(
-      profitBefore: profitBefore,
-      profitAfter: profitAfter,
+      iThreeNormal: iThreeNormal,
+      iThreeMinimal: iThreeMinimal,
+      iTwoNormal: iTwoNormal,
+      iTwoMinimal: iTwoMinimal,
+      iThreeNormalActual: iThreeNormalActual,
+      iThreeMinimalActual: iThreeMinimalActual,
+      iTwoNormalActual: iTwoNormalActual,
+      iTwoMinimalActual: iTwoMinimalActual,
+      iThreeNormal10: iThreeNormal10,
+      iThreeMinimal10: iThreeMinimal10,
+      iTwoNormal10: iTwoNormal10,
+      iTwoMinimal10: iTwoMinimal10,
     );
   }
 
@@ -181,30 +207,30 @@ class _Calculator3ScreenState extends State<Calculator3Screen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Калькулятор прибутку від сонячних електростанцій',
+                  'Калькулятор визначення струмів для підстанції ХПнЕМ',
                   style: Theme.of(context).textTheme.headlineMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
                 InputField(
-                  label: 'Середньодобова потужність, МВт',
-                  value: data.power,
-                  onChanged: (value) => updateData('power', value),
+                  label: 'Rc.н, Ом',
+                  value: data.rcn,
+                  onChanged: (value) => updateData('rcn', value),
                 ),
                 InputField(
-                  label: 'Середньоквадратичне відхилення, МВт',
-                  value: data.deviation1,
-                  onChanged: (value) => updateData('deviation1', value),
+                  label: 'Хc.н, Ом',
+                  value: data.xcn,
+                  onChanged: (value) => updateData('xcn', value),
                 ),
                 InputField(
-                  label: 'Середньоквадратичне відхилення 2, МВт',
-                  value: data.deviation2,
-                  onChanged: (value) => updateData('deviation2', value),
+                  label: 'Rc.min, Ом',
+                  value: data.rcmin,
+                  onChanged: (value) => updateData('rcmin', value),
                 ),
                 InputField(
-                  label: 'Вартість електроенергії, МВт',
-                  value: data.electricity,
-                  onChanged: (value) => updateData('electricity', value),
+                  label: 'Хc.min, Ом',
+                  value: data.xcmin,
+                  onChanged: (value) => updateData('xcmin', value),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -340,12 +366,59 @@ class ResultsDisplay extends StatelessWidget {
           'Результати розрахунків:',
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 8),
         ResultSection(
-          title: 'Прибутки:',
+          title:
+              'Струми двофазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ:',
           items: {
-            'до вдосконалення': ResultValue(results.profitBefore, 'тис.грн'),
-            'після вдосконалення': ResultValue(results.profitAfter, 'тис.грн'),
+            'нормальний режим': ResultValue(results.iTwoNormal.toDouble(), 'A'),
+            'мінімальний режим':
+                ResultValue(results.iTwoMinimal.toDouble(), 'A'),
+          },
+        ),
+        ResultSection(
+          title:
+              'Струми трифазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ:',
+          items: {
+            'нормальний режим':
+                ResultValue(results.iThreeNormal.toDouble(), 'A'),
+            'мінімальний режим':
+                ResultValue(results.iThreeMinimal.toDouble(), 'A'),
+          },
+        ),
+        ResultSection(
+          title: 'Дійсні струми двофазного КЗ на шинах 10 кВ:',
+          items: {
+            'нормальний режим':
+                ResultValue(results.iTwoNormalActual.toDouble(), 'A'),
+            'мінімальний режим':
+                ResultValue(results.iTwoMinimalActual.toDouble(), 'A'),
+          },
+        ),
+        ResultSection(
+          title: 'Дійсні струми трифазного КЗ на шинах 10 кВ:',
+          items: {
+            'нормальний режим':
+                ResultValue(results.iThreeNormalActual.toDouble(), 'A'),
+            'мінімальний режим':
+                ResultValue(results.iThreeMinimalActual.toDouble(), 'A'),
+          },
+        ),
+        ResultSection(
+          title: 'Струми двофазного КЗ в точці 10:',
+          items: {
+            'нормальний режим':
+                ResultValue(results.iTwoNormal10.toDouble(), 'A'),
+            'мінімальний режим':
+                ResultValue(results.iTwoMinimal10.toDouble(), 'A'),
+          },
+        ),
+        ResultSection(
+          title: 'Струми двофазного КЗ в точці 10:',
+          items: {
+            'нормальний режим':
+                ResultValue(results.iThreeNormal10.toDouble(), 'A'),
+            'мінімальний режим':
+                ResultValue(results.iThreeMinimal10.toDouble(), 'A'),
           },
         ),
       ],
@@ -387,9 +460,9 @@ class ResultSection extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(entry.key),
-                  Text(entry.value.unit != null
-                      ? '${entry.value.value.toStringAsFixed(2)} ${entry.value.unit}'
-                      : entry.value.value.toStringAsFixed(2)),
+                  Text(
+                    '${entry.value.value.toStringAsFixed(1)} ${entry.value.unit}',
+                  ),
                 ],
               ),
             )),

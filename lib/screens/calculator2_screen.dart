@@ -1,43 +1,31 @@
+// ignore_for_file: unused_local_variable
+
 import 'package:flutter/material.dart';
 import 'dart:math';
 
 // вхідні дані
 class Data {
-  final double power;
-  final double electricity;
-  final double deviation1;
-  final double deviation2;
+  final int power;
 
   Data({
-    this.power = 0.0,
-    this.electricity = 0.0,
-    this.deviation1 = 0.0,
-    this.deviation2 = 0.0,
+    this.power = 0,
   });
 
   Data copyWith({
-    double? power,
-    double? electricity,
-    double? deviation1,
-    double? deviation2,
+    int? power,
   }) {
     return Data(
       power: power ?? this.power,
-      electricity: electricity ?? this.electricity,
-      deviation1: deviation1 ?? this.deviation1,
-      deviation2: deviation2 ?? this.deviation2,
     );
   }
 }
 
 // результати розрахунків
 class CalculationResults {
-  final double profitBefore;
-  final double profitAfter;
+  final double initialCurrentValue;
 
   CalculationResults({
-    this.profitBefore = 0.0,
-    this.profitAfter = 0.0,
+    this.initialCurrentValue = 0.0,
   });
 }
 
@@ -52,118 +40,41 @@ class _Calculator2ScreenState extends State<Calculator2Screen> {
   Data data = Data();
   CalculationResults? results;
 
-  void updateData(String field, double value) {
+  void updateData(String field, int value) {
     setState(() {
       switch (field) {
         case 'power':
           data = data.copyWith(power: value);
-        case 'electricity':
-          data = data.copyWith(electricity: value);
-        case 'deviation1':
-          data = data.copyWith(deviation1: value);
-        case 'deviation2':
-          data = data.copyWith(deviation2: value);
       }
     });
   }
 
-  // функція нормального закону розподілу потужності (формула 9.1)
-  double normalDistribution(double x, double power, double sigma) {
-    return (1 / (sigma * sqrt(2 * pi))) *
-        exp(-(pow(x - power, 2)) / (2 * pow(sigma, 2)));
-  }
-
-  // інтегрування
-  double integrate(
-    double a, // нижня межа
-    double b, // верхня межа
-    int n, // кількість точок для інтегрування
-    double power,
-    double sigma,
-  ) {
-    final h = (b - a) / n;
-    var sum = (normalDistribution(a, power, sigma) +
-            normalDistribution(b, power, sigma)) /
-        2;
-
-    for (var i = 1; i < n; i++) {
-      final x = a + i * h;
-      sum += normalDistribution(x, power, sigma);
-    }
-
-    return h * sum;
-  }
-
-  double calculateEnergyWithoutImbalance(
-    double power,
-    double sigma,
-    double lowerBound,
-    double upperBound,
-  ) {
-    return integrate(
-          lowerBound,
-          upperBound,
-          100000,
-          power,
-          sigma,
-        ) *
-        100; // переводимо у відсотки
-  }
-
   CalculationResults calculateResults(Data data) {
-    // діапазони
-    const lowerBound = 4.75;
-    const upperBound = 5.25;
+    // середня номінальна напруга точки, в якій виникає КЗ
+    const usn = 10.5;
+    // номінальна потужність трансформатора
+    const snomt = 6.3;
+    const uk = 10.5;
 
-    // розрахунок частки енергії без небалансів до покращення (δW1)
-    final energyWithoutImbalance1 = calculateEnergyWithoutImbalance(
-      data.power,
-      data.deviation1,
-      lowerBound,
-      upperBound,
-    ).round().toDouble();
+    // середній час відновлення трансформатора напругою 35 кВ
+    const recoveryTimeT = 45 * 0.001;
+    // середній час планового простою трансформатора напругою 35 кВ
+    const averageTime = 4 * 0.001;
+    const pm = 5.12 * 1000;
+    const tm = 6451;
 
-    // розрахунок частки енергії без небалансів після покращення (δW2)
-    final energyWithoutImbalance2 = calculateEnergyWithoutImbalance(
-      data.power,
-      data.deviation2,
-      lowerBound,
-      upperBound,
-    ).round().toDouble();
+    // опори елементів заступної схеми
+    final xc = pow(usn, 2) / data.power;
+    final xt = (uk / 100) * (pow(usn, 2) / snomt);
 
-    // енергія W1
-    final energy1 = data.power * 24 * energyWithoutImbalance1 / 100;
+    // сумарний опір для точки К1
+    final totalResistance = xc + xt;
 
-    // прибуток П1
-    final profit1 = energy1 * data.electricity;
-
-    // енергія W2
-    final energy2 = data.power * 24 * (1 - energyWithoutImbalance1 / 100);
-
-    // штраф Ш1
-    final fine1 = energy2 * data.electricity;
-
-    // загальний прибуток перед покращенням
-    final profitBefore = profit1 - fine1;
-
-    // енергія W3
-    final energy3 = data.power * 24 * energyWithoutImbalance2 / 100;
-
-    // прибуток П2
-    final profit2 = energy3 * data.electricity;
-
-    // енергія W4
-    final energy4 = data.power * 24 * (1 - energyWithoutImbalance2 / 100);
-
-    // штраф Ш2
-    final fine2 = energy4 * data.electricity;
-
-    // загальний прибуток після покращення
-    final profitAfter = profit2 - fine2;
+    // початкове діюче значення струму трифазного КЗ
+    final initialCurrentValue = usn / (sqrt(3.0) * totalResistance);
 
     return CalculationResults(
-      profitBefore: profitBefore,
-      profitAfter: profitAfter,
+      initialCurrentValue: initialCurrentValue,
     );
   }
 
@@ -181,30 +92,20 @@ class _Calculator2ScreenState extends State<Calculator2Screen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Калькулятор прибутку від сонячних електростанцій',
+                  'Калькулятор визначення струмів КЗ на шинах 10 кВ ГПП',
                   style: Theme.of(context).textTheme.headlineMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
+                Text(
+                  'Визначити струми К3 на шинах 10 кВ ГПП. Потужність К3 200 МВ А. Для перевірки вибраних кабелів та вимикачів необіхдно розрахувати струми К3 на шинах низької напруги ГПП',
+                  textAlign: TextAlign.justify,
+                ),
+                const SizedBox(height: 16),
                 InputField(
-                  label: 'Середньодобова потужність, МВт',
+                  label: 'Потужність КЗ',
                   value: data.power,
                   onChanged: (value) => updateData('power', value),
-                ),
-                InputField(
-                  label: 'Середньоквадратичне відхилення, МВт',
-                  value: data.deviation1,
-                  onChanged: (value) => updateData('deviation1', value),
-                ),
-                InputField(
-                  label: 'Середньоквадратичне відхилення 2, МВт',
-                  value: data.deviation2,
-                  onChanged: (value) => updateData('deviation2', value),
-                ),
-                InputField(
-                  label: 'Вартість електроенергії, МВт',
-                  value: data.electricity,
-                  onChanged: (value) => updateData('electricity', value),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -256,8 +157,8 @@ class _Calculator2ScreenState extends State<Calculator2Screen> {
 
 class InputField extends StatefulWidget {
   final String label;
-  final double value;
-  final Function(double) onChanged;
+  final int value;
+  final Function(int) onChanged;
 
   const InputField({
     super.key,
@@ -277,17 +178,16 @@ class _InputFieldState extends State<InputField> {
   void initState() {
     super.initState();
     _controller = TextEditingController(
-      text: widget.value == 0.0 ? '' : widget.value.toString(),
+      text: widget.value == 0 ? '' : widget.value.toString(),
     );
   }
 
   @override
   void didUpdateWidget(covariant InputField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.value != oldWidget.value &&
-        !_controller.text.contains(RegExp(r'[.,]$'))) {
+    if (widget.value != oldWidget.value) {
       final selection = _controller.selection;
-      _controller.text = widget.value == 0.0 ? '' : widget.value.toString();
+      _controller.text = widget.value == 0 ? '' : widget.value.toString();
       _controller.selection = selection;
     }
   }
@@ -308,14 +208,13 @@ class _InputFieldState extends State<InputField> {
           labelText: widget.label,
           border: const OutlineInputBorder(),
         ),
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        keyboardType: TextInputType.number,
         onChanged: (value) {
           if (value.isEmpty) {
-            widget.onChanged(0.0);
+            widget.onChanged(0);
             return;
           }
-          final normalizedValue = value.replaceAll(',', '.');
-          final number = double.tryParse(normalizedValue);
+          final number = int.tryParse(value);
           if (number != null) {
             widget.onChanged(number);
           }
@@ -342,10 +241,10 @@ class ResultsDisplay extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         ResultSection(
-          title: 'Прибутки:',
+          title: 'Результати:',
           items: {
-            'до вдосконалення': ResultValue(results.profitBefore, 'тис.грн'),
-            'після вдосконалення': ResultValue(results.profitAfter, 'тис.грн'),
+            'Початкове діюче значення\nструму трифазного КЗ':
+                ResultValue(results.initialCurrentValue, 'кА'),
           },
         ),
       ],
@@ -387,9 +286,9 @@ class ResultSection extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(entry.key),
-                  Text(entry.value.unit != null
-                      ? '${entry.value.value.toStringAsFixed(2)} ${entry.value.unit}'
-                      : entry.value.value.toStringAsFixed(2)),
+                  Text(
+                    '${entry.value.value.toStringAsFixed(1)} ${entry.value.unit}',
+                  ),
                 ],
               ),
             )),
